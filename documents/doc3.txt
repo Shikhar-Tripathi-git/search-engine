@@ -1,0 +1,2 @@
+JavaScript is used for web development.
+React is built using JavaScript.

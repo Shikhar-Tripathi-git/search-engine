@@ -1,0 +1,2 @@
+Python is used for machine learning.
+Python is beginner friendly.
