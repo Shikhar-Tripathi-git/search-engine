@@ -35,11 +35,38 @@ for(const document of documents){                                           //Ac
     }
 }
 
-const query="JaVa";
-const search=query.toLowerCase();
-if(index[search]){
-    console.log(index[search])
+const query = "java backend programming";
+const queryTokens = [...new Set(query.toLowerCase().split(" "))];          //We tokenise multi word query and insert it into a set to remove duplicate tokens, then convert back to array using [...set]
+
+for(const token of queryTokens){                                           //This ensures that we return appropriate message if token doesnt exist in index
+    if(!index[token]){
+        console.log("No matching doc");
+        return;
+    }
 }
-else{
-    console.log("Doc not found");
+
+queryTokens.sort(                                                          //We sort this first to ensure first token has least index size so that we loop the least number of times while finding intersections
+    (a,b) => index[a].size - index[b].size
+);
+
+let result = new Set(index[queryTokens[0]]);                               //We set result as first query token because an empty set o intersection would give empty set, so useless 
+
+for(let i = 1; i < queryTokens.length; i++) {                              //Traversing all other tokens remaining
+    const current = index[queryTokens[i]];                                 //We store next set of docs containing the token into current
+    const intersection = new Set();
+
+    for(const doc of result) {                                             //We iterate through docs of result and check if they exist in current as well
+        if(current.has(doc)) {                                             //If they exist then both tokens exist in this doc
+            intersection.add(doc);
+        }
+    }
+
+    result = intersection;                                                 //We get result as intersection of 2 docs
+}
+
+console.log("Results Found: ",result.size);
+let count=1;
+for(const res of result){
+    console.log("\n",count,".) ",res);
+    count+=1;
 }
