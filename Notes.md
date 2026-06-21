@@ -43,3 +43,13 @@ Compute score
 Sort by score
 ↓
 Display results
+
+## Inverse Document Frequency
+
+rarer words useddin documents i.e word used in only 2 do out of 100 is more informative thus is given higher idf score
+DF: Object.keys(index["java"]).length
+const N = documents.length;
+IDF = log(N / DF)
+
+Combinging TF IDF
+TF-IDF = TF × IDF

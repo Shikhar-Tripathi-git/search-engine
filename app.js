@@ -76,19 +76,24 @@ for(const res of result){
     count+=1;
 }
 
-const rankedResults = [];                                                  //Term frequency Ranking
+const rankedResults = [];                                                  //Term frequency x Inverse Document Frequency Ranking
+const n = documents.length;
 
-for(const doc of result){                                                  //Now from the documents in result set, we score each doc on basis of freq of tokens used in it
+for(const doc of result){                                                  //Now from the documents in result set, we use tf x idf that is, we score each document on basis of repetition of tokens and rarity of token
     let score=0;
     for(const token of queryTokens){
-        score+=index[token][doc];
+        const tf = index[token][doc];
+        const df = Object.keys(index[token]).length;
+        const idf=Math.log(n/df);
+        score += tf*idf;
     }
+
     rankedResults.push({                                                    //We use array of objects to store docName and its score corresponding to the query
         name: doc,
-        score: score 
+        tfIdfScore: score 
     });
 }
 
 rankedResults.sort(                                                         //We sort the results to get the ideal doc on the top
-    (a,b)=> b.score - a.score
+    (a,b)=> b.termFrequency - a.termFrequency
 );
