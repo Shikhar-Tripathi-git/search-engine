@@ -29,9 +29,14 @@ for(const document of documents){                                           //Ac
 
     for(const word of document.words){                                      //Accessing each word to create an inverted index
         if(!index[word]){                                                   //If word does not exist in index, we create an index
-            index[word]=new Set();                                          //We use a set because for each doc name, we want it to appear once irrespective of number of same words
+            index[word]={};                                                 //We use a map for docname: freq because for each doc name we need to rank it on basis of freq of tokens
         }
-        index[word].add(document.name);                                     //We add doc name onto the set of index
+        if(!index[word][document.name]){                                    //If first time encountering doc name for a keyword, make freq 1 
+            index[word][document.name]=1;
+        }                                    
+        else{
+            index[word][document.name]++;                                   //Else increment freq
+        }
     }
 }
 
@@ -49,7 +54,7 @@ queryTokens.sort(                                                          //We 
     (a,b) => index[a].size - index[b].size
 );
 
-let result = new Set(index[queryTokens[0]]);                               //We set result as first query token because an empty set o intersection would give empty set, so useless 
+let result = new Set(Object.keys(index[queryTokens[0]]));                  //We set result as first query token because an empty set o intersection would give empty set, so useless 
 
 for(let i = 1; i < queryTokens.length; i++) {                              //Traversing all other tokens remaining
     const current = index[queryTokens[i]];                                 //We store next set of docs containing the token into current
@@ -70,3 +75,20 @@ for(const res of result){
     console.log("\n",count,".) ",res);
     count+=1;
 }
+
+const rankedResults = [];                                                  //Term frequency Ranking
+
+for(const doc of result){                                                  //Now from the documents in result set, we score each doc on basis of freq of tokens used in it
+    let score=0;
+    for(const token of queryTokens){
+        score+=index[token][doc];
+    }
+    rankedResults.push({                                                    //We use array of objects to store docName and its score corresponding to the query
+        name: doc,
+        score: score 
+    });
+}
+
+rankedResults.sort(                                                         //We sort the results to get the ideal doc on the top
+    (a,b)=> b.score - a.score
+);
