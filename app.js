@@ -19,7 +19,7 @@ for(const fileName of fileNames){                       //FileNames contains lis
     documents.push(document);                           //Creating array of objects for all files
 }                                                       //DOCUMENT INGESTION COMPLETED
 
-const index={};
+const index={};                                                             //Creating INVERTED INDEX
 
 for(const document of documents){                                           //Accessing Each object in Documents ( We use of instead of in because in gives indexes, eg: 0, 1, 2)
     const optimisedContent=document.content.toLowerCase().replace(".","");  //Converting content by removing punctuation and to lowercase to stardadise tokens
@@ -27,15 +27,16 @@ for(const document of documents){                                           //Ac
 
     document.words=words;                                                   //Adding new property to document object
 
-    for(const word of document.words){                                      //Accessing each word to create an inverted index
+    for(let idx=0; idx<document.words.length; idx++){                       //Accessing each word to create an inverted index
+        let word=document.words[idx];
         if(!index[word]){                                                   //If word does not exist in index, we create an index
-            index[word]={};                                                 //We use a map for docname: freq because for each doc name we need to rank it on basis of freq of tokens
+            index[word]={};                                                 //We use a map for docname: position because it allows us to search for a phrase
         }
-        if(!index[word][document.name]){                                    //If first time encountering doc name for a keyword, make freq 1 
-            index[word][document.name]=1;
+        if(!index[word][document.name]){                                    //If first time encountering doc name for a keyword, create array with index
+            index[word][document.name]=[idx];
         }                                    
         else{
-            index[word][document.name]++;                                   //Else increment freq
+            index[word][document.name].push(idx);                           //Else push index into array
         }
     }
 }
@@ -82,7 +83,7 @@ const n = documents.length;
 for(const doc of result){                                                  //Now from the documents in result set, we use tf x idf that is, we score each document on basis of repetition of tokens and rarity of token
     let score=0;
     for(const token of queryTokens){
-        const tf = index[token][doc];
+        const tf = index[token][doc].length;
         const df = Object.keys(index[token]).length;
         const idf=Math.log(n/df);
         score += tf*idf;
