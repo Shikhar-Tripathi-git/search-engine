@@ -53,3 +53,28 @@ IDF = log(N / DF)
 
 Combinging TF IDF
 TF-IDF = TF × IDF
+
+## Implementation of phrase search and boolean search
+By boolean search, if input query is java backend, we find docs that contain both toens irrespective of their index,
+but when input is "java backend", we do a phrase search which is more restrictive and only returns docs that contain that exact phrase
+thus we implement both in our search engine
+
+We still do boolean search while doing phrase search
+Intersection is a cheap filter.
+Phrase verification is more expensive.
+Search engines almost always do the cheap work first.
+This Is Called Candidate Filtering
+Think of it like airport security.
+Everyone enters:
+1,000,000 docs
+↓
+Security checkpoint:
+Contains all words?
+↓
+Only:
+400 docs
+↓
+Detailed inspection:
+Does the exact phrase exist?
+↓
+Final results.
