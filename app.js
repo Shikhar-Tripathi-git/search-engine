@@ -22,13 +22,13 @@ for(const fileName of fileNames){                       //FileNames contains lis
 const index={};                                                             //Creating INVERTED INDEX
 
 for(const document of documents){                                           //Accessing Each object in Documents ( We use of instead of in because in gives indexes, eg: 0, 1, 2)
-    const optimisedContent=document.content.toLowerCase().replace(".","");  //Converting content by removing punctuation and to lowercase to stardadise tokens
+    const optimisedContent=document.content.toLowerCase().replace(/[^\w\s]/g, "");  //Converting content by removing punctuation and to lowercase to stardadise tokens
     const words=optimisedContent.split(" ");                                //Creating tokens
 
     document.words=words;                                                   //Adding new property to document object
 
     for(let idx=0; idx<document.words.length; idx++){                       //Accessing each word to create an inverted index
-        let word=document.words[idx];
+        const word=document.words[idx];
         if(!index[word]){                                                   //If word does not exist in index, we create an index
             index[word]={};                                                 //We use a map for docname: position because it allows us to search for a phrase
         }
@@ -41,7 +41,7 @@ for(const document of documents){                                           //Ac
     }
 }
 
-const query = "java backend programming";
+let query = "java backend programming";
 
 const isPhraseQuery =                                                       //We check if Query is phrase query or not by hard checking presence of ""
     query.startsWith('"') &&                                                //If yes, we check for presence of phrases instead of just presence in doc
@@ -60,8 +60,10 @@ for(const token of queryTokens){                                           //Thi
     }
 }
 
-queryTokens.sort(                                                          //We sort this first to ensure first token has least index size so that we loop the least number of times while finding intersections
-    (a,b) => index[a].size - index[b].size
+queryTokens.sort(                                                           //We sort this first to ensure first token has least index size so that we loop the least number of times while finding intersections
+    (a,b)=>
+        Object.keys(index[a]).length -
+        Object.keys(index[b]).length
 );
 
 let result = new Set(Object.keys(index[queryTokens[0]]));                  //We set result as first query token because an empty set o intersection would give empty set, so useless 
@@ -71,7 +73,7 @@ for(let i = 1; i < queryTokens.length; i++) {                              //Tra
     const intersection = new Set();
 
     for(const doc of result) {                                             //We iterate through docs of result and check if they exist in current as well
-        if(current.has(doc)) {                                             //If they exist then both tokens exist in this doc
+        if(current[doc]) {                                                 //If they exist then both tokens exist in this doc
             intersection.add(doc);
         }
     }
@@ -83,7 +85,7 @@ function findMatchingPositions(previousPositions, currentPositions){        //Th
 
     let i = 0;                                                              //We take 2 position array as input and check for existence of index2==index1+1, if yes, phrase exists, now it can be compared with upcoming tokens
     let j = 0;
-    let matched = [];                                                       //Phrase QUery Helper Function
+    const matched = [];                                                       //Phrase QUery Helper Function
 
     while(i < previousPositions.length && j < currentPositions.length){
 
@@ -129,13 +131,6 @@ if(isPhraseQuery){
     result = phraseResults;                                                     // To make sure result stores final 
 }
 
-console.log("Results Found: ",result.size);
-let count=1;
-for(const res of result){
-    console.log("\n",count,".) ",res);
-    count+=1;
-}
-
 const rankedResults = [];                                                  //Term frequency x Inverse Document Frequency Ranking
 const n = documents.length;
 
@@ -155,6 +150,12 @@ for(const doc of result){                                                  //Now
 }
 
 rankedResults.sort(                                                         //We sort the results to get the ideal doc on the top
-    (a,b)=> b.termFrequency - a.termFrequency
+    (a,b)=> b.tfIdfScore - a.tfIdfScore
 );
 
+console.log("Results Found: ",result.size);
+let count=1;
+for(const res of result){
+    console.log("\n",count,".) ",res);
+    count+=1;
+}
