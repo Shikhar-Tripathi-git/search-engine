@@ -1,41 +1,34 @@
 const cheerio=require("cheerio");
 
-async function main() {
-
-    const pages = await crawl("https://books.toscrape.com");
-
-    console.log(pages);
-
-}
-
-main();
-
-async function crawl(seedUrl) {                                         //Crawl Function helps to retrieve information from webPages
+async function crawl(seedUrl, onDocument) {                                         //Crawl Function helps to retrieve information from webPages
 
     const queue = [];                                               //Queue is used to store all links in line to be crawled
     const visited = new Set();                                      //Keeps track of all crawled websites to prevent infinite loops
     const seedDomain = new URL(seedUrl).hostname;                   //Domain of original url
-    const MAX_PAGES = 100;                                          //Size Limit for number of pages crawled
+    const MAX_PAGES = 40;                                          //Size Limit for number of pages crawled
 
     visited.add(seedUrl);                                               //We initialise BFS , we first add it to visited set
     queue.push(seedUrl);                                                //Add it to queue to be crawled
+    let pagesCrawled = 0;
 
-    while(queue.length>0){
+    while(queue.length>0 && pagesCrawled < MAX_PAGES){
         const currentUrl = queue.shift();                               //queue.shift acts as dequeue and we store it while removing it from queue
         const html = await crawlPage(currentUrl);                       //We download the HTML
 
         const $ = cheerio.load(html);
         const links = extractLinks($);                               //We extract all links from said HTML and store it in array
-        const text = extractText($);
         const document = createDocument(currentUrl, $);             //We create a document for which we create an inverted index
+
+        if(onDocument){                                             //Whoever calls crawler, also provides the function onDocument
+            onDocument(document);                                   //onDocument decides what we do with the document, console.log it or return it etc
+        }
+
+        pagesCrawled++;
 
         for(const href of links){                                       //For Each link we follow architecture
 
-            if(visited.size >= MAX_PAGES)
-                return visited;
-
             const normalisedLink = normalizeURL(href, currentUrl);      //Normalise the link
-            console.log("Currently Crawling:", currentUrl);
+
             if(!normalisedLink){                                        //InCase normalisedLink is null, it would have crashed next line, thus we add this as safeguard
                 continue;
             }
@@ -84,7 +77,7 @@ function normalizeURL(href, baseURL) {
     }
 }
 
-function canonicalizeURL(url){                                      //We canonicalize the url, i.e remove fragents from url
+function canonicalizeURL(url){                                      //We canonicalize the url, i.e remove fragents(#) from url
 
     const parsed = new URL(url);
 
@@ -135,12 +128,14 @@ function extractTitle($) {
 
 }
 
-function createDocuments(url, $) {
+function createDocument(url, $) {
 
     return {
-        url : url,
+        id : url,
         title: extractTitle($),
         content: extractText($)
     };
 
 }
+
+module.exports = crawl;

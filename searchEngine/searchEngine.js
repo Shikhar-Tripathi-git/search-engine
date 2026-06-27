@@ -24,6 +24,7 @@ function findMatchingPositions(previousPositions, currentPositions){        //Th
 function createSearchEngine(documents = []){                                //Library used to modularise the complete pipeline
 
     const index = {};                                                       //Creating invertedIndex
+    let documentCount = 0;
 
     for(const document of documents){                                       //Accessing Each object in Documents ( We use of instead of in because in gives indexes, eg: 0, 1, 2)
         indexDocument(document);                                            //If document is empty, loop doesnt run, we are stream Indexing, but if document contains all docs then we are batch indexing using loop
@@ -124,7 +125,6 @@ function createSearchEngine(documents = []){                                //Li
     function rankDocuments(result, queryTokens){
 
         const rankedResults=[];
-        const n=documents.length;
 
         for(const doc of result){
 
@@ -132,11 +132,19 @@ function createSearchEngine(documents = []){                                //Li
 
             for(const token of queryTokens){
 
-                const tf=index[token][doc].length;                          //Term Frequency
-                const df=Object.keys(index[token]).length;                  //Document Frequency of token
-                const idf=Math.log(n/df);                                   //Inverse Document Frequency
+                const tf=index[token][doc].length;                          //Term Frequency is the number of times a token appears in a specific doc
+                const df=Object.keys(index[token]).length;                  //Document Frequency of token is number of documents that contain the token
+                const idf=Math.log(documentCount/df);                                   //Inverse Document Frequency
 
                 score += tf*idf;
+
+                console.log({
+                    token,
+                    tf,
+                    df,
+                    n: documentCount,
+                    idf: Math.log(documentCount / df)
+                });
             }
 
             rankedResults.push({
@@ -170,7 +178,7 @@ function createSearchEngine(documents = []){                                //Li
                 index[word][document.id].push(idx);                           //Else push index into array
             }
         }
-
+        documentCount++;
     }
 
     return{                                                                 //Returning engine object
