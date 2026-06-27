@@ -23,7 +23,12 @@ async function crawl(seedUrl) {                                         //Crawl 
     while(queue.length>0){
         const currentUrl = queue.shift();                               //queue.shift acts as dequeue and we store it while removing it from queue
         const html = await crawlPage(currentUrl);                       //We download the HTML
-        const links = extractLinks(html);                               //We extract all links from said HTML and store it in array
+
+        const $ = cheerio.load(html);
+        const links = extractLinks($);                               //We extract all links from said HTML and store it in array
+        const text = extractText($);
+        const document = createDocument(currentUrl, $);             //We create a document for which we create an inverted index
+
         for(const href of links){                                       //For Each link we follow architecture
 
             if(visited.size >= MAX_PAGES)
@@ -54,10 +59,9 @@ async function crawlPage(url) {                                         //Used t
 
 }
 
-function extractLinks(html){                                  //Helper function to extract all links from html 
+function extractLinks($){                                  //Helper function to extract all links from html 
 
     const links = [];
-    const $ = cheerio.load(html);
 
     $("a").each((index, element) => {
 
@@ -113,4 +117,30 @@ function filterURL(url, seedDomain) {                               //seedDomain
     }
 
     return true;                                                    //Else we crawl the url
+}
+
+function extractText($) {                                           //Helper function to extract text from HTML
+
+    $("script").remove();                                           //We remove script(JS) and style(CSS) from the DOM TREE
+
+    $("style").remove();
+
+    return $("body").text().replace(/\s+/g, " ").trim();            //We extract body tag and concatenate every text using .text and then find every sequence of whitespace and replace it with a single space.
+
+}
+
+function extractTitle($) {
+
+    return $("title").text().trim();
+
+}
+
+function createDocuments(url, $) {
+
+    return {
+        url : url,
+        title: extractTitle($),
+        content: extractText($)
+    };
+
 }
