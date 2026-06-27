@@ -1,86 +1,3 @@
-const fs=require("fs");                                 //Importing files module
-const { SocketAddress } = require("net");
-const path=require("path");                             //Importing Path module
-
-const documentPath=path.join(__dirname,"documents");    //path.join joines current directory name with documents folder to give path of documents folder
-const fileNames=fs.readdirSync(documentPath);           //We use readdirSync to read all the content inside a folder i.e documentPath
-
-const documents = [];                                   //We need to load files from disk to memory to access its fileName and Content, thus we need array of objects
-for(const fileName of fileNames){                       //FileNames contains list of all files in documents, accessing them one by one
-
-    const filePath=path.join(documentPath,fileName);    //To read content of file, we need filepath, filename contains (doc1.txt) thus we need documentPath as well
-    const content=fs.readFileSync(filePath, "utf-8");   //We read Content of each file, we use utf-8 to convert data from binary to alphabets
-
-    const document = {                                  //Creating object for each file
-        name: fileName,
-        content: content
-    };
-
-    documents.push(document);                           //Creating array of objects for all files
-}                                                       //DOCUMENT INGESTION COMPLETED
-
-const index={};                                                             //Creating INVERTED INDEX
-
-for(const document of documents){                                           //Accessing Each object in Documents ( We use of instead of in because in gives indexes, eg: 0, 1, 2)
-    const optimisedContent=document.content.toLowerCase().replace(/[^\w\s]/g, "");  //Converting content by removing punctuation and to lowercase to stardadise tokens
-    const words=optimisedContent.split(" ");                                //Creating tokens
-
-    document.words=words;                                                   //Adding new property to document object
-
-    for(let idx=0; idx<document.words.length; idx++){                       //Accessing each word to create an inverted index
-        const word=document.words[idx];
-        if(!index[word]){                                                   //If word does not exist in index, we create an index
-            index[word]={};                                                 //We use a map for docname: position because it allows us to search for a phrase
-        }
-        if(!index[word][document.name]){                                    //If first time encountering doc name for a keyword, create array with index
-            index[word][document.name]=[idx];
-        }                                    
-        else{
-            index[word][document.name].push(idx);                           //Else push index into array
-        }
-    }
-}
-
-let query = "java backend programming";
-
-const isPhraseQuery =                                                       //We check if Query is phrase query or not by hard checking presence of ""
-    query.startsWith('"') &&                                                //If yes, we check for presence of phrases instead of just presence in doc
-    query.endsWith('"');
-
-if(isPhraseQuery){
-    query = query.slice(1, -1);
-}
-
-const queryTokens = [...new Set(query.toLowerCase().split(" "))];          //We tokenise multi word query and insert it into a set to remove duplicate tokens, then convert back to array using [...set]
-
-for(const token of queryTokens){                                           //This ensures that we return appropriate message if token doesnt exist in index
-    if(!index[token]){
-        console.log("No matching doc");
-        return;
-    }
-}
-
-queryTokens.sort(                                                           //We sort this first to ensure first token has least index size so that we loop the least number of times while finding intersections
-    (a,b)=>
-        Object.keys(index[a]).length -
-        Object.keys(index[b]).length
-);
-
-let result = new Set(Object.keys(index[queryTokens[0]]));                  //We set result as first query token because an empty set o intersection would give empty set, so useless 
-
-for(let i = 1; i < queryTokens.length; i++) {                              //Traversing all other tokens remaining
-    const current = index[queryTokens[i]];                                 //We store next set of docs containing the token into current
-    const intersection = new Set();
-
-    for(const doc of result) {                                             //We iterate through docs of result and check if they exist in current as well
-        if(current[doc]) {                                                 //If they exist then both tokens exist in this doc
-            intersection.add(doc);
-        }
-    }
-
-    result = intersection;                                                 //We get result as intersection of 2 docs
-}
-
 function findMatchingPositions(previousPositions, currentPositions){        //This function allows us to check if index2==index1+1 exists so to form a phrase, using a two pointer approach
 
     let i = 0;                                                              //We take 2 position array as input and check for existence of index2==index1+1, if yes, phrase exists, now it can be compared with upcoming tokens
@@ -101,61 +18,165 @@ function findMatchingPositions(previousPositions, currentPositions){        //Th
             i++;
         }
     }
-
     return matched;
 }
 
-if(isPhraseQuery){
+function createSearchEngine(documents = []){                                //Library used to modularise the complete pipeline
 
-    const phraseResults = new Set();                                            //We make a new Set to store all docs that contain the phrase
+    const index = {};                                                       //Creating invertedIndex
 
-    for(const doc of result){                                                   // For each Document that contains all query words such that eg: doc1: [1, 5, 6]
+    for(const document of documents){                                       //Accessing Each object in Documents ( We use of instead of in because in gives indexes, eg: 0, 1, 2)
+        indexDocument(document);                                            //If document is empty, loop doesnt run, we are stream Indexing, but if document contains all docs then we are batch indexing using loop
+    }
 
-        let matchedPositions = index[queryTokens[0]][doc];                      // We take first query token document positional array as base for matchingPositions
+    function search(query){                                                 //Since search requires documents and query, thus it is kept inside the createSearchEngine
 
-        for(let i = 1; i < queryTokens.length; i++){
+        const {isPhraseQuery, queryTokens} = processQuery(query);           //We check if query passed is a phraseQuery and, collect the tokens
 
-            const currentPositions = index[queryTokens[i]][doc];                // Retreive next query token positional array in the same doc to check index1, index2
-            matchedPositions = findMatchingPositions( matchedPositions, currentPositions);          // We get new matchedPosition using helper function that returns last index of phrase
+        let result = intersectPostingLists(queryTokens);                    //We receive documents array that contan all tokens
 
-            if(matchedPositions.length === 0){                                  // If it is empty then phrase does not exist
-                break;                                                          // Phrase can no longer be extended.
+        if(result.size===0){                                                //If no such document exists, we return empty array
+            return [];
+        }
+
+        if(isPhraseQuery){                                                  //We perform phraseSearch if given by user, else booleanSearch is already done and stored in result
+            result = performPhraseSearch(result, queryTokens);
+        }
+
+        return rankDocuments(result, queryTokens);                          //We rank the documents on basis of highest tf-idf score to return best matching document at the top
+    }
+
+    function processQuery(query){
+
+        const isPhraseQuery =                                               //Check if query is a phrase query by ""
+            query.startsWith('"') &&
+            query.endsWith('"');
+
+        if(isPhraseQuery){                                                  //If yes then we remove the "" to better operate on them while tokenising
+            query = query.slice(1,-1);
+        }
+
+        const queryTokens = [...new Set(query.toLowerCase().split(" "))];   //Convert query to lowercase and split to tokenise and convert back to an array, we use set to Remove duplicate query terms so repeated words don't affect
+
+        return {
+            isPhraseQuery,
+            queryTokens
+        };
+    }
+
+    function intersectPostingLists(queryTokens){                            //We find which all documents contain given token by intersecting
+
+        for(const token of queryTokens){                                    //If token doesnt exist in any document, then we add an empty set to avoid error while sorting
+            if(!index[token]){
+                return new Set();
             }
         }
 
-        if(matchedPositions.length > 0){                                        // If not empty then add it to another set where phrase exists
-            phraseResults.add(doc);
+        queryTokens.sort(                                                   //We sort the queryTokens array to make sure the first token appears in least number of doc to keep as base for result
+            (a,b)=>
+                Object.keys(index[a]).length -
+                Object.keys(index[b]).length
+        );
+
+        let result = new Set(Object.keys(index[queryTokens[0]]));           //We make a new set with first token documents as base
+
+        for(let i=1;i<queryTokens.length;i++){
+
+            const current=index[queryTokens[i]];
+            const intersection=new Set();
+
+            for(const doc of result){
+
+                if(current[doc]){
+                    intersection.add(doc);
+                }
+            }
+            result=intersection;
         }
+        return result;                                                     //We receive documents which contain all tokens
     }
 
-    result = phraseResults;                                                     // To make sure result stores final 
-}
+    function performPhraseSearch(result, queryTokens){
 
-const rankedResults = [];                                                  //Term frequency x Inverse Document Frequency Ranking
-const n = documents.length;
+        const phraseResults = new Set();
 
-for(const doc of result){                                                  //Now from the documents in result set, we use tf x idf that is, we score each document on basis of repetition of tokens and rarity of token
-    let score=0;
-    for(const token of queryTokens){
-        const tf = index[token][doc].length;
-        const df = Object.keys(index[token]).length;
-        const idf=Math.log(n/df);
-        score += tf*idf;
+        for(const doc of result){
+
+            let matchedPositions = index[queryTokens[0]][doc];          //We get positional index array of first token in doc as base
+
+            for(let i=1;i<queryTokens.length;i++){
+
+                const currentPositions = index[queryTokens[i]][doc];   //We take next token to check for phrase
+                matchedPositions = findMatchingPositions(matchedPositions, currentPositions);
+
+                if(matchedPositions.length===0){                        //We check if any such index2==index1+1 positions exist
+                    break;
+                }
+            }
+
+            if(matchedPositions.length>0){                              //If there are any existing phrases, then we take that doc as result
+                phraseResults.add(doc);
+            }
+        }
+        return phraseResults;
     }
 
-    rankedResults.push({                                                    //We use array of objects to store docName and its score corresponding to the query
-        name: doc,
-        tfIdfScore: score 
-    });
+    function rankDocuments(result, queryTokens){
+
+        const rankedResults=[];
+        const n=documents.length;
+
+        for(const doc of result){
+
+            let score=0;
+
+            for(const token of queryTokens){
+
+                const tf=index[token][doc].length;                          //Term Frequency
+                const df=Object.keys(index[token]).length;                  //Document Frequency of token
+                const idf=Math.log(n/df);                                   //Inverse Document Frequency
+
+                score += tf*idf;
+            }
+
+            rankedResults.push({
+                name:doc,
+                tfIdfScore:score
+            });
+        }
+
+        rankedResults.sort(                                                 //Sorting rank in descending order
+            (a,b)=>b.tfIdfScore-a.tfIdfScore
+        );
+
+        return rankedResults;
+    }
+
+    function indexDocument(document){
+
+        const optimisedContent=document.content.toLowerCase().replace(/[^\w\s]/g, "");  //Converting content by removing punctuation and to lowercase to stardadise tokens
+        const tokens=optimisedContent.split(" ");                                //Creating tokens
+
+        for(let idx=0; idx<tokens.length; idx++){                       //Accessing each word to create an inverted index
+
+            const word = tokens[idx];
+            if(!index[word]){                                                   //If word does not exist in index, we create an index
+                index[word]={};                                                 //We use a map for docname: position because it allows us to search for a phrase
+            }
+            if(!index[word][document.id]){                                    //If first time encountering doc name for a keyword, create array with index
+                index[word][document.id]=[idx];
+            }                                    
+            else{
+                index[word][document.id].push(idx);                           //Else push index into array
+            }
+        }
+
+    }
+
+    return{                                                                 //Returning engine object
+        search,
+        indexDocument
+    };
 }
 
-rankedResults.sort(                                                         //We sort the results to get the ideal doc on the top
-    (a,b)=> b.tfIdfScore - a.tfIdfScore
-);
-
-console.log("Results Found: ",result.size);
-let count=1;
-for(const res of result){
-    console.log("\n",count,".) ",res);
-    count+=1;
-}
+module.exports = createSearchEngine;
